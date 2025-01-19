@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTubeメモ</title>
+  <style>
+    body {
+      display: flex;
+      font-family: Arial, sans-serif;
+      margin: 0;
+    }
+    #sidebar {
+      width: 20%;
+      background: #f4f4f4;
+      padding: 10px;
+      border-right: 1px solid #ccc;
+      overflow-y: auto;
+    }
+    #content {
+      flex-grow: 1;
+      padding: 10px;
+    }
+    .folder {
+      cursor: pointer;
+      margin-bottom: 10px;
+      padding-left: 10px;
+    }
+    .folder.active {
+      background-color: #d1e7dd; /* 選択された中分類を色分け */
+      font-weight: bold;
+    }
+    .video {
+      margin-bottom: 15px;
+      padding: 10px 0;
+      border-bottom: 1px solid #ccc; /* セパレーター */
+    }
+    iframe {
+      width: 100%;
+      max-width: 600px;
+      height: 315px;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar"></div>
+  <div id="content"></div>
+
+  <script>
+    let originalData; // 初期データを保存する変数
+    let currentFolder; // 現在選ばれているフォルダを記録
+
+    async function loadCSV() {
+      const response = await fetch('videos.csv');
+      const csvText = await response.text();
+      const rows = csvText.trim().split('\n');
+      const headers = rows.shift().split(',');
+
+      originalData = rows.map(row => {
+        const values = row.split(',');
+        return headers.reduce((acc, header, i) => {
+          acc[header] = values[i];
+          return acc;
+        }, {});
+      });
+
+      generateGenreSidebar(originalData);
+    }
+
+    function generateGenreSidebar(data) {
+      const genres = [...new Set(data.map(item => item['ジャンル']))];
+      const sidebar = document.getElementById('sidebar');
+      sidebar.innerHTML = ''; // サイドバーをリセット
+      const content = document.getElementById('content');
+      content.innerHTML = '<p>ジャンルを選択してください。</p>'; // 初期メッセージ
+
+      genres.forEach(genre => {
+        const folderDiv = document.createElement('div');
+        folderDiv.className = 'folder';
+        folderDiv.textContent = `📁 ${genre}`;
+        folderDiv.onclick = () => showSubcategories(genre, data);
+        sidebar.appendChild(folderDiv);
+      });
+    }
+
+    function showSubcategories(genre, data) {
+      const sidebar = document.getElementById('sidebar');
+      const content = document.getElementById('content');
+      sidebar.innerHTML = ''; // サイドバーをリセット
+      content.innerHTML = ''; // コンテンツをリセット
+
+      const filteredData = data.filter(item => item['ジャンル'] === genre);
+      const subcategories = [...new Set(filteredData.map(item => item['中分類']).filter(sub => sub))]; // 中分類が空は除外
+
+      // サイドバーに戻るボタン
+      const backDiv = document.createElement('div');
+      backDiv.className = 'folder';
+      backDiv.textContent = '🔙 戻る';
+      backDiv.onclick = () => generateGenreSidebar(originalData); // 初期状態に戻る
+      sidebar.appendChild(backDiv);
+
+      // 中分類フォルダを追加
+      subcategories.forEach((subcategory, index) => {
+        const subFolderDiv = document.createElement('div');
+        subFolderDiv.className = 'folder';
+        subFolderDiv.textContent = `📂 ${subcategory}`;
+        subFolderDiv.onclick = () => {
+          highlightActiveFolder(subFolderDiv); // 選択されたフォルダをハイライト
+          showVideos(genre, subcategory, data);
+        };
+        sidebar.appendChild(subFolderDiv);
+
+        // 最初の中分類をデフォルトで表示
+        if (index === 0) {
+          highlightActiveFolder(subFolderDiv); // 最初のフォルダをデフォルト選択
+          showVideos(genre, subcategory, data);
+        }
+      });
+    }
+
+    function showVideos(genre, subcategory, data) {
+      const content = document.getElementById('content');
+      content.innerHTML = ''; // コンテンツをリセット
+
+      const filteredVideos = data.filter(item => item['ジャンル'] === genre && item['中分類'] === subcategory);
+
+      filteredVideos.forEach(video => {
+        const videoDiv = document.createElement('div');
+        videoDiv.className = 'video';
+
+        // 動画タイトルと埋め込み動画プレイヤー、URLを直接表示
+        videoDiv.innerHTML = `
+          <h3>${video['タイトル']}</h3>
+          <iframe src="${video['URL'].replace('watch?v=', 'embed/')}" allowfullscreen></iframe>
+          <p>${video['URL']}</p>
+        `;
+        content.appendChild(videoDiv);
+      });
+    }
+
+    function highlightActiveFolder(folderDiv) {
+      // 以前選ばれていたフォルダのスタイルをリセット
+      if (currentFolder) {
+        currentFolder.classList.remove('active');
+      }
+
+      // 現在のフォルダを選択状態にする
+      folderDiv.classList.add('active');
+      currentFolder = folderDiv;
+    }
+
+    loadCSV();
+  </script>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTubeチャンネル動画リスト生成</title>
+</head>
+<body>
+  <h1>YouTubeチャンネル動画リスト生成</h1>
+
+  <!-- 入力フォーム -->
+  <div>
+    <label for="genreInput">ジャンル：</label>
+    <input type="text" id="genreInput" placeholder="ジャンルを入力" style="width: 200px;">
+    <br>
+    <label for="subcategoryInput">小分類：</label>
+    <input type="text" id="subcategoryInput" placeholder="小分類を入力" style="width: 200px;">
+    <br>
+    <label for="channelIdInput">チャンネルID：</label>
+    <input type="text" id="channelIdInput" placeholder="チャンネルIDを入力" style="width: 300px;">
+    <br><br>
+    <button onclick="fetchVideos()">リストを生成</button>
+    <button onclick="exportToCSV()" id="csvButton" disabled>CSVをダウンロード</button>
+  </div>
+
+  <!-- 動画リストを表示するエリア -->
+  <div id="videos" style="margin-top: 20px;"></div>
+
+  <script>
+    const API_KEY = 'AIzaSyCHQkfyC3bqqiGLDoxaDfbYd3WUbI4kN7M'; // 取得したAPIキーをここに設定
+    let videoList = []; // CSV用にデータを格納する配列
+
+    async function fetchVideos() {
+      const genre = document.getElementById('genreInput').value.trim();
+      const subcategory = document.getElementById('subcategoryInput').value.trim();
+      const channelId = document.getElementById('channelIdInput').value.trim();
+
+      // 入力チェック
+      if (!genre || !subcategory || !channelId) {
+        alert("ジャンル、小分類、チャンネルIDをすべて入力してください！");
+        return;
+      }
+
+      const videosDiv = document.getElementById('videos');
+      videosDiv.innerHTML = '<p>動画リストを取得中...</p>'; // ローディングメッセージ
+
+      videoList = []; // リストをリセット
+
+      try {
+        // チャンネル情報からUploadsプレイリストIDを取得
+        const channelResponse = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${API_KEY}`);
+        const channelData = await channelResponse.json();
+
+        if (!channelData.items || channelData.items.length === 0) {
+          videosDiv.innerHTML = '<p>指定したチャンネルIDが見つかりません。</p>';
+          return;
+        }
+
+        const uploadsPlaylistId = channelData.items[0].contentDetails.relatedPlaylists.uploads;
+
+        // アップロード動画リストを取得
+        const playlistResponse = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&key=${API_KEY}&maxResults=50`);
+        const playlistData = await playlistResponse.json();
+
+        if (!playlistData.items || playlistData.items.length === 0) {
+          videosDiv.innerHTML = '<p>動画が見つかりません。</p>';
+          return;
+        }
+
+        // 動画リストを表示
+        videosDiv.innerHTML = ''; // リセット
+        playlistData.items.forEach(item => {
+          const videoTitle = item.snippet.title.replace(/"/g, '""'); // ダブルクォートをエスケープ
+          const videoId = item.snippet.resourceId.videoId;
+          const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+          // 指定されたフォーマットで表示
+          const videoElement = document.createElement('p');
+          videoElement.textContent = `${genre},${subcategory},"${videoTitle}",${videoUrl}`;
+          videosDiv.appendChild(videoElement);
+
+          // データをCSV用に格納
+          videoList.push([genre, subcategory, `"${videoTitle}"`, videoUrl]);
+        });
+
+        // CSVボタンを有効化
+        document.getElementById('csvButton').disabled = false;
+      } catch (error) {
+        console.error(error);
+        videosDiv.innerHTML = '<p>エラーが発生しました。もう一度お試しください。</p>';
+      }
+    }
+
+    function exportToCSV() {
+      if (videoList.length === 0) {
+        alert("リストが空です。まずリストを生成してください！");
+        return;
+      }
+
+      // CSVヘッダー
+      const csvHeader = 'ジャンル,小分類,動画名,URL\n';
+
+      // CSVデータ生成
+      const csvRows = videoList.map(row => row.join(',')).join('\n');
+      const csvContent = csvHeader + csvRows;
+
+      // CSVをBlobとして生成
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+
+      // ダウンロードリンクを生成
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'videos.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
